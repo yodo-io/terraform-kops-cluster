@@ -1,0 +1,101 @@
+apiVersion: kops/v1alpha2
+kind: Cluster
+metadata:
+  name: {{ .cluster_name }}
+  labels:
+    revision: {{ .revision | quote }}
+spec:
+  api:
+    loadBalancer:
+      type: Public
+  authorization:
+    rbac: {}
+  channel: stable
+  sshAccess: {{ .ssh_access }}
+  kubernetesApiAccess: {{ .api_access }}
+  cloudProvider: aws
+  configBase: s3://{{.kops_state}}/{{.cluster_name}}
+  # Create one etcd member per AZ
+  etcdClusters:
+  - etcdMembers:
+  {{range $i, $az := .vpc_config.availability_zones}}
+    - instanceGroup: master-{{.}}
+      name: {{. | replace $.vpc_config.region "" }} {{/* converts eu-west-1a to a */}}
+  {{end}}
+    name: main
+  - etcdMembers:
+  {{range $i, $az := .vpc_config.availability_zones}}
+    - instanceGroup: master-{{.}}
+      name: {{. | replace $.vpc_config.region "" }} {{/* converts eu-west-1a to a */}}
+  {{end}}
+    name: events
+  iam:
+    allowContainerRegistry: true
+    legacy: false
+  kubernetesVersion: 1.10.6
+  masterPublicName: api.{{.cluster_name}}
+  networkCIDR: {{.vpc_config.cidr_block}}
+  networkID: {{.vpc_config.vpc_id}}
+  networking:
+    calico: {}
+  nonMasqueradeCIDR: 100.64.0.0/10
+  subnets:
+  # Public (utility) subnets, one per AZ
+  {{range $i, $id := .vpc_config.public_subnet_ids}}
+  - id: {{.}}
+    name: utility-{{index $.vpc_config.availability_zones $i}}
+    type: Utility
+    zone: {{index $.vpc_config.availability_zones $i}}
+  {{end}}
+  # Private subnets, one per AZ
+  {{range $i, $id := .vpc_config.private_subnet_ids}}
+  - id: {{.}}
+    name: {{index $.vpc_config.availability_zones $i}}
+    type: Private
+    zone: {{index $.vpc_config.availability_zones $i}}
+    egress: {{index $.vpc_config.natgw_ids $i}}
+  {{end}}
+  topology:
+    dns:
+      type: Public
+    masters: private
+    nodes: private
+---
+
+# Create one master per AZ
+{{range .vpc_config.availability_zones}}
+apiVersion: kops/v1alpha2
+kind: InstanceGroup
+metadata:
+  labels:
+    kops.k8s.io/cluster: {{$.cluster_name}}
+  name: master-{{.}}
+spec:
+  image: kope.io/k8s-1.10-debian-stretch-amd64-hvm-ebs-2018-08-17
+  kubernetesVersion: 1.10.6
+  machineType: {{$.cluster_config.master_machine_type}}
+  maxSize: 1
+  minSize: 1
+  role: Master
+  subnets:
+  - {{.}}
+---
+  {{end}}
+
+apiVersion: kops/v1alpha2
+kind: InstanceGroup
+metadata:
+  labels:
+    kops.k8s.io/cluster: {{.cluster_name}}
+  name: nodes
+spec:
+  image: kope.io/k8s-1.10-debian-stretch-amd64-hvm-ebs-2018-08-17
+  kubernetesVersion: 1.10.6
+  machineType: {{.cluster_config.node_machine_type}}
+  maxSize: {{.cluster_config.num_nodes_max}}
+  minSize: {{.cluster_config.num_nodes_min}}
+  role: Node
+  subnets:
+  {{range .vpc_config.availability_zones}}
+  - {{.}}
+  {{end}}
