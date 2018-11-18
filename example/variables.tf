@@ -15,5 +15,5 @@ variable "aws_region" {
 }
 
 variable "update_cluster" {
-  default = false
+  default = true
 }

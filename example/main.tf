@@ -61,48 +61,31 @@ resource "local_file" "ssh_private_key" {
   content  = "${module.cluster_vpc.ssh_keys["private_key_pem"]}"
 }
 
-# module "kube_config" {
-#   source     = "./kube-config"
-#   output_dir = "${path.module}/.generated"
+# Bootstrap the cluster using helm.
+# FIXME: Presently the cluster, particularly the kubeconfig needs to exist _before_ the kubernetes 
+# provider config can be loaded, so we need to run terraform without the bootstrap module
+module "cluster_bootstrap" {
+  source     = "../kube-bootstrap"
+  kubeconfig = "${module.cluster.kubeconfig}"
 
+  # will be used to configure helm & kubernetes provider
 
-#   # cluster must exist, so make sure to use a reference to the cluster module!
-#   cluster_name = "${module.cluster.cluster_name}"
-#   kops_state   = "${local.kops_state}"
+  #   datadog = {
+  #     enabled = true
+  #     api_key = ""
+  #   }
 
+  #   fluentd = {
+  #     enabled     = true
+  #     output_type = "loggly"
+  #   }
 
-#   ssh_keys = "${module.cluster_vpc.ssh_keys}"
-# }
-
-
-# Bootstrap the cluster using helm 
-# module "cluster_bootstrap" {
-#   source     = "../kube-bootstrap"
-#   kubeconfig = "${module.cluster.kubeconfig}"
-
-
-#   # will be used to configure helm & kubernetes provider
-
-
-#   #   datadog = {
-#   #     enabled = true
-#   #     api_key = ""
-#   #   }
-
-
-#   #   fluentd = {
-#   #     enabled     = true
-#   #     output_type = "loggly"
-#   #   }
-
-
-#   # cluster_autoscaler = {
-#   #   enabled = true
-#   # }
-#   # namespaces = [
-#   #   "backend",
-#   #   "logistics",
-#   #   "...",
-#   # ]
-# }
-
+  # cluster_autoscaler = {
+  #   enabled = true
+  # }
+  # namespaces = [
+  #   "backend",
+  #   "logistics",
+  #   "...",
+  # ]
+}

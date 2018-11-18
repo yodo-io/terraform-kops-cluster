@@ -3,15 +3,10 @@ variable "kubeconfig" {
   default = "~/.kube/config"
 }
 
-variable "tiller_namespace" {
-  description = "Kube namespace to deploy the default Tiller deployment into"
-  default     = "kube-system"
+variable "bin_kubectl" {
+  default = "kubectl"
 }
 
-variable "tiller_history_max" {
-  default = 5
-}
-
-variable "tiller_version" {
-  default = "v2.8.2"
+variable "bin_helm" {
+  default = "helm"
 }

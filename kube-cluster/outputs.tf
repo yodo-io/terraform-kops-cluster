@@ -7,7 +7,7 @@ output "name" {
 }
 
 output "kubeconfig" {
-  description = "Location of kubeconfig file for this cluster"
+  description = "Location of kubeconfig file for this cluster. Note that this sadly _cannot_ be used as input for Terraform provider configuration blocks"
   value       = "${local.out_kubeconfig}"
 }
 

@@ -15,8 +15,11 @@ locals = {
 
   out_dir           = "${path.module}/.generated"
   out_cluster_spec  = "${local.out_dir}/cluster.yaml"
-  out_kubeconfig    = "${local.out_dir}/kubeconfig"
+  out_kubeconfig    = "${local.out_dir}/${var.name}.kubeconfig"
   out_admin_rsa_pub = "${local.out_dir}/admin-rsa.pub"
+  out_config_hash   = "${local.out_dir}/${var.name}.md5"
+
+  apiserver_retry_wait = 10
 
   kops_env = {
     KOPS_CLUSTER_NAME  = "${var.name}"
@@ -30,6 +33,12 @@ resource "local_file" "cluster_admin_key" {
   content  = "${var.ssh_public_key}"
 }
 
+resource "local_file" "cluster_spec" {
+  depends_on = ["null_resource.update_cluster"]
+  filename   = "${local.out_cluster_spec}.bitch"
+  content    = "${file(local.out_cluster_spec)}"
+}
+
 # Generate a shell scripts for cluster update and kube config generation. Not as nice as a Terraform provider
 # but it gets the job done and saves us the need to install a custom provider.
 resource "local_file" "cluster_update_sh" {
@@ -38,7 +47,7 @@ resource "local_file" "cluster_update_sh" {
   content = <<EOF
 export KOPS_CLUSTER_NAME="${var.name}"
 export KOPS_STATE_STORE="s3://${var.kops_state}"
-export KUBECONFIG="${local.out_kubeconfig}" 
+export KUBECONFIG="${local.out_kubeconfig}"
 
 mkdir -p ${local.out_dir}
 
@@ -50,15 +59,17 @@ kops update cluster --yes
 kops export kubecfg
 
 until kubectl get pod > /dev/null 2>&1; do 
-  echo "Kubernetes api server not ready, will retry in 5s"
-  sleep 5
+  echo "Kubernetes api server not ready, will retry in ${local.apiserver_retry_wait}s"
+  sleep ${local.apiserver_retry_wait}
 done
 
 echo "You need to export KUBECONFIG=${local.out_kubeconfig} to connect to your cluster."
 EOF
 }
 
-# This script deletes the cluster, used in the destroy time provisioner below.
+# This script deletes the cluster. Using it in a destroy-time provisioner would destroy and 
+# re-create the cluster each time the config is changed, so we don't include there. User is 
+# expected to run the delete script manually if the cluster is to be removed.
 resource "local_file" "cluster_delete_sh" {
   filename = "${local.out_dir}/delete-cluster.sh"
 
@@ -77,7 +88,7 @@ resource "null_resource" "update_cluster" {
   count = "${var.update_cluster}"
 
   triggers = {
-    update_cluster = "${base64encode(local_file.cluster_update_sh.content)}"
+    update_cluster = "${md5(local_file.cluster_update_sh.content)}"
   }
 
   provisioner "local-exec" {
@@ -85,9 +96,9 @@ resource "null_resource" "update_cluster" {
     interpreter = ["bash", "-c"]
   }
 
-  provisioner "local-exec" {
-    when        = "destroy"
-    command     = "${local_file.cluster_delete_sh.filename}"
-    interpreter = ["bash", "-c"]
-  }
+  # provisioner "local-exec" {
+  #   when        = "destroy"
+  #   command     = "${local_file.cluster_delete_sh.filename}"
+  #   interpreter = ["bash", "-c"]
+  # }
 }
