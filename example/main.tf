@@ -46,7 +46,7 @@ module "cluster" {
   kops_state     = "${local.kops_state}"
   ssh_public_key = "${module.cluster_vpc.ssh_keys["public_key_openssh"]}"
 
-  update_cluster = true
+  update_cluster = "${var.update_cluster}"
 }
 
 # Dump the generated SSH keys into file system for troubleshooting.

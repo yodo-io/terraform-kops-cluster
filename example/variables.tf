@@ -13,3 +13,7 @@ variable "domain" {
 variable "aws_region" {
   default = "ap-southeast-1"
 }
+
+variable "update_cluster" {
+  default = false
+}

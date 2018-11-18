@@ -20,7 +20,7 @@ output "scripts" {
   description = "Generated scripts for cluster maintenance"
 
   value = {
-    update_cluster = "${local_file.cluster_update_script.filename}"
-    delete_cluster = "${local_file.cluster_delete_script.filename}"
+    update_cluster = "${local_file.cluster_update_sh.filename}"
+    delete_cluster = "${local_file.cluster_delete_sh.filename}"
   }
 }
