@@ -13,7 +13,7 @@ locals = {
   cluster_values_json = "${jsonencode(local.cluster_values)}"
   cluster_template    = "${path.module}/resources/cluster-template.yaml"
 
-  out_dir           = "${path.module}/.generated"
+  out_dir           = "/usr/local/var/yodo-io/kube/${var.name}/generated"
   out_cluster_spec  = "${local.out_dir}/cluster.yaml"
   out_kubeconfig    = "${local.out_dir}/${var.name}.kubeconfig"
   out_admin_rsa_pub = "${local.out_dir}/admin-rsa.pub"
@@ -33,18 +33,20 @@ resource "local_file" "cluster_admin_key" {
   content  = "${var.ssh_public_key}"
 }
 
-resource "local_file" "cluster_spec" {
-  depends_on = ["null_resource.update_cluster"]
-  filename   = "${local.out_cluster_spec}.bitch"
-  content    = "${file(local.out_cluster_spec)}"
-}
+# resource "local_file" "cluster_spec" {
+#   depends_on = ["null_resource.cluster_update_sh"]
+#   filename   = "${local.out_cluster_spec}"
+#   content    = "${file(local.out_cluster_spec)}"
+# }
 
-# Generate a shell scripts for cluster update and kube config generation. Not as nice as a Terraform provider
+# Generate a shell script for cluster update and kube config generation. Not as nice as a Terraform provider
 # but it gets the job done and saves us the need to install a custom provider.
 resource "local_file" "cluster_update_sh" {
   filename = "${local.out_dir}/update-cluster.sh"
 
   content = <<EOF
+set -e -o pipefail
+
 export KOPS_CLUSTER_NAME="${var.name}"
 export KOPS_STATE_STORE="s3://${var.kops_state}"
 export KUBECONFIG="${local.out_kubeconfig}"
@@ -68,7 +70,7 @@ EOF
 }
 
 # This script deletes the cluster. Using it in a destroy-time provisioner would destroy and 
-# re-create the cluster each time the config is changed, so we don't include there. User is 
+# re-create the cluster each time the config is changed, so we don't include here. User is 
 # expected to run the delete script manually if the cluster is to be removed.
 resource "local_file" "cluster_delete_sh" {
   filename = "${local.out_dir}/delete-cluster.sh"
@@ -95,10 +97,22 @@ resource "null_resource" "update_cluster" {
     command     = "${local_file.cluster_update_sh.filename}"
     interpreter = ["bash", "-c"]
   }
+}
 
-  # provisioner "local-exec" {
-  #   when        = "destroy"
-  #   command     = "${local_file.cluster_delete_sh.filename}"
-  #   interpreter = ["bash", "-c"]
-  # }
+resource "null_resource" "export_kubecfg" {
+  triggers = {
+    update_cluster = "${md5(local_file.cluster_update_sh.content)}"
+  }
+
+  provisioner "local-exec" {
+    interpreter = ["bash", "-c"]
+
+    command = <<EOF
+export KOPS_CLUSTER_NAME="${var.name}"
+export KOPS_STATE_STORE="s3://${var.kops_state}"
+
+kops export kubecfg
+
+EOF
+  }
 }

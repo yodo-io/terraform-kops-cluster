@@ -10,8 +10,7 @@ locals {
   database_subnets = ["${slice(local.database_subnet_cidrs, 0, length(local.availability_zones))}"]
 
   base_tags = {
-    Terraform         = "managed"
-    KubernetesCluster = "${var.cluster_name}"
+    Terraform = "managed"
   }
 
   tags = "${merge(var.tags, local.base_tags)}"
